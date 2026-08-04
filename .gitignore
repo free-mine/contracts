@@ -1,0 +1,6 @@
+cache
+coverage
+artifacts
+node_modules
+
+.DS_Store
