@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { Gate } from '../contracts/Gate.sol';
-import { IDollar } from '../contracts/DepositStore.sol';
-import { SystemFixture } from './helpers/SystemFixture.sol';
-import { ExecutionTarget } from './mocks/ExecutionTarget.sol';
-import { ManuallyOperated } from '../contracts/ManuallyOperated.sol';
+import '../contracts/Gate.sol';
+import './helpers/SystemFixture.sol';
+import './mocks/ExecutionTarget.sol';
+import '../contracts/DepositStore.sol';
+import '../contracts/ManuallyOperated.sol';
 
 contract NominalFlowTest is SystemFixture {
   function testBuyMovesDollarsAndMintsExactTokens() public {

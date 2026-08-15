@@ -2,15 +2,15 @@
 pragma solidity 0.8.36;
 
 interface IHardhatVm {
-  function addr(uint256 privateKey) external pure returns (address);
-  function label(address account, string calldata newLabel) external;
-  function prank(address msgSender) external;
-  function startPrank(address msgSender) external;
   function stopPrank() external;
-  function warp(uint256 newTimestamp) external;
   function expectRevert() external;
+  function prank(address msgSender) external;
+  function warp(uint256 newTimestamp) external;
+  function startPrank(address msgSender) external;
   function expectRevert(bytes4 revertData) external;
   function expectRevert(bytes calldata revertData) external;
+  function addr(uint256 privateKey) external pure returns (address);
+  function label(address account, string calldata newLabel) external;
 
   function expectEmit(
     bool checkTopic1,
@@ -21,6 +21,7 @@ interface IHardhatVm {
   ) external;
 
   function assertEq(uint256 left, uint256 right) external pure;
+  function assertEq(bool left, bool right) external pure;
   function assertEq(address left, address right) external pure;
   function assertEq(bytes32 left, bytes32 right) external pure;
   function assertEq(string calldata left, string calldata right ) external pure;
@@ -40,6 +41,10 @@ abstract contract HardhatTest {
   }
 
   function assertEq(uint256 left, uint256 right) internal pure {
+    vm.assertEq(left, right);
+  }
+
+  function assertEq(bool left, bool right) internal pure {
     vm.assertEq(left, right);
   }
 
