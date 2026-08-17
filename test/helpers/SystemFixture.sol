@@ -4,11 +4,12 @@ pragma solidity 0.8.36;
 import '@openzeppelin/contracts/utils/math/Math.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-import { HardhatTest } from './HardhatTest.sol';
-import { Gate } from '../../contracts/Gate.sol';
-import { MockDollar } from '../mocks/MockDollar.sol';
-import { Token } from '../../contracts/FundToken.sol';
-import { Fund, IGate } from '../../contracts/PersonalFund.sol';
+import './HardhatTest.sol';
+import '../mocks/MockDollar.sol';
+import '../../contracts/Gate.sol';
+import '../mocks/StandardDollar.sol';
+import '../../contracts/FundToken.sol';
+import '../../contracts/PersonalFund.sol';
 
 abstract contract SystemFixture is HardhatTest {
   uint256 internal constant ONE_TOKEN = 1e18;
@@ -43,6 +44,33 @@ abstract contract SystemFixture is HardhatTest {
   event EntryPriceChanged(uint256 oldPrice, uint256 newPrice);
   event Sacrificed(address indexed author, uint256 tokenAmount);
 
+  event SuccessorScheduled(
+    address indexed successor,
+    uint256 previousClaimableAt,
+    uint256 claimableAt,
+    address indexed scheduledBy
+  );
+
+  event SuccessorRemoved(
+    address indexed successor,
+    uint256 claimableAt,
+    address indexed removedBy
+  );
+
+  event AdminActivated(address indexed admin, uint256 claimableAt);
+  event AdminRemoved(address indexed admin);
+  event DollarChanged(IDollar indexed newDollar, uint256 indexed decimals);
+
+  event OwnershipTransferStarted(
+    address indexed previousOwner,
+    address indexed newOwner
+  );
+
+  event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+  );
+
   Gate internal gate;
   Fund internal fund;
   address internal bob;
@@ -50,13 +78,19 @@ abstract contract SystemFixture is HardhatTest {
   address internal owner;
   address internal alice;
   address internal stranger;
+  address internal newOwner;
   MockDollar internal dollar;
+  address internal successor;
+  address internal secondSuccessor;
 
   function setUp() public virtual {
+    bob = makeAddr('bob');
     owner = makeAddr('owner');
     alice = makeAddr('alice');
-    bob = makeAddr('bob');
+    newOwner = makeAddr('newOwner');
     stranger = makeAddr('stranger');
+    successor = makeAddr('successor');
+    secondSuccessor = makeAddr('secondSuccessor');
 
     vm.startPrank(owner);
 
@@ -103,8 +137,51 @@ abstract contract SystemFixture is HardhatTest {
     fund.execute(address(dollar), 0, data);
   }
 
+  function _buyWithDollar(
+    StandardDollar selectedDollar,
+    address buyer,
+    uint256 dollarAmount
+  ) internal returns (uint256 tokenAmount) {
+    uint256 scale = _dollarScale(selectedDollar.decimals());
+
+    tokenAmount = _dollarsToTokens(dollarAmount, gate.entryPrice(), scale);
+    selectedDollar.mint(buyer, dollarAmount);
+    vm.startPrank(buyer);
+    selectedDollar.approve(address(gate), dollarAmount);
+    gate.buy(dollarAmount);
+    vm.stopPrank();
+  }
+
+  function _approveReserve(
+    IERC20 selectedDollar,
+    address staff,
+    uint256 amount
+  ) internal {
+    bytes memory data = abi.encodeCall(IERC20.approve, (address(gate), amount));
+
+    vm.prank(staff);
+    fund.execute(address(selectedDollar), 0, data);
+  }
+
+  function _transferFundDollar(
+    IERC20 selectedDollar,
+    address staff,
+    address receiver,
+    uint256 amount
+  ) internal {
+    bytes memory data = abi.encodeCall(IERC20.transfer, (receiver, amount));
+
+    vm.prank(staff);
+    fund.execute(address(selectedDollar), 0, data);
+  }
+
   function _completeStage(uint256 price) internal {
     vm.prank(owner);
+    fund.completeStage(price);
+  }
+
+  function _completeStage(address staff, uint256 price) internal {
+    vm.prank(staff);
     fund.completeStage(price);
   }
 
@@ -125,6 +202,14 @@ abstract contract SystemFixture is HardhatTest {
     return Math.mulDiv(dollarAmount, ONE_TOKEN * DOLLAR_SCALE, price);
   }
 
+  function _dollarsToTokens(
+    uint256 dollarAmount,
+    uint256 price,
+    uint256 scale
+  ) internal pure returns (uint256) {
+    return Math.mulDiv(dollarAmount, ONE_TOKEN * scale, price);
+  }
+
   function _tokensToDollars(
     uint256 tokenAmount,
     uint256 price
@@ -132,10 +217,34 @@ abstract contract SystemFixture is HardhatTest {
     return Math.mulDiv(tokenAmount, price, ONE_TOKEN * DOLLAR_SCALE);
   }
 
+  function _tokensToDollars(
+    uint256 tokenAmount,
+    uint256 price,
+    uint256 scale
+  ) internal pure returns (uint256) {
+    return Math.mulDiv(tokenAmount, price, ONE_TOKEN * scale);
+  }
+
+  function _dollarScale(uint8 dollarDecimals)
+    internal
+    pure
+    returns (uint256)
+  {
+    return 10 ** (18 - dollarDecimals);
+  }
+
   function _reserveAmount(
     uint256 tokenAmount,
     uint256 price
   ) internal pure returns (uint256) {
     return _tokensToDollars(tokenAmount, price);
+  }
+
+  function _reserveAmount(
+    uint256 tokenAmount,
+    uint256 price,
+    uint256 scale
+  ) internal pure returns (uint256) {
+    return _tokensToDollars(tokenAmount, price, scale);
   }
 }

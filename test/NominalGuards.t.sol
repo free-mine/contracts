@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
+import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/interfaces/draft-IERC6093.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
 
-import { Gate } from '../contracts/Gate.sol';
-import { WithStaff } from '../contracts/WithStaff.sol';
-import { SystemFixture } from './helpers/SystemFixture.sol';
-import { DepositStore, IDollar } from '../contracts/DepositStore.sol';
+import '../contracts/Gate.sol';
+import '../contracts/WithStaff.sol';
+import './helpers/SystemFixture.sol';
+import '../contracts/DepositStore.sol';
 
 contract NominalGuardsTest is SystemFixture {
   uint256 private constant PURCHASE_AMOUNT = 100e6;
@@ -240,6 +240,12 @@ contract NominalGuardsTest is SystemFixture {
 
     vm.expectRevert(WithStaff.SenderIsNotStaff.selector);
     vm.prank(stranger);
+    fund.changeDollar(address(dollar));
+
+    assertEq(address(gate.dollar()), address(dollar));
+
+    vm.expectRevert(WithStaff.SenderIsNotStaff.selector);
+    vm.prank(stranger);
     fund.setContractURI('ipfs://stranger');
   }
 
@@ -275,6 +281,12 @@ contract NominalGuardsTest is SystemFixture {
     vm.expectRevert(expectedError);
     vm.prank(owner);
     gate.changeEntryPrice(INITIAL_PRICE);
+
+    vm.expectRevert(expectedError);
+    vm.prank(owner);
+    gate.changeDollar(IDollar(address(dollar)));
+
+    assertEq(address(gate.dollar()), address(dollar));
   }
 
   function testGateOwnerCannotBuy() public {
