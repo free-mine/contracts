@@ -62,13 +62,13 @@ Token.transferOwnership(GATE)
 
 ### 3. PersonalFund
 
-Разверните `Fund` из `contracts/PersonalFund.sol`:
+Разверните `PersonalFund` из `contracts/PersonalFund.sol`:
 
 ```text
-Fund(GATE, contractURI)
+PersonalFund(GATE, contractURI)
 ```
 
-Сохраните адрес как `FUND`. Передайте владение `Gate` контракту `Fund`:
+Сохраните адрес как `FUND`. Передайте владение `Gate` контракту `PersonalFund`:
 
 ```text
 Gate.transferOwnership(FUND)
@@ -78,9 +78,9 @@ Gate.transferOwnership(FUND)
 
 ```text
 Fund owner
-    │
+    │ owns
     ▼
-  Fund
+  PersonalFund
     │ owns
     ▼
   Gate
@@ -89,17 +89,17 @@ Fund owner
 FundToken
 ```
 
-Если аккаунт, выполнивший деплой `Fund`,
+Если аккаунт, выполнивший деплой `PersonalFund`,
 не должен оставаться владельцем Фонда, вызовите:
 
 ```text
-Fund.transferOwnership(newOwner)
+PersonalFund.transferOwnership(newOwner)
 ```
 
 а затем с адреса `newOwner`:
 
 ```text
-Fund.acceptOwnership()
+PersonalFund.acceptOwnership()
 ```
 
 ## Проверка
@@ -107,8 +107,8 @@ Fund.acceptOwnership()
 После деплоя проверьте:
 
 ```text
-Fund.owner()            == ожидаемый owner
-Fund.gate()             == GATE
+PersonalFund.owner()    == ожидаемый owner
+PersonalFund.gate()     == GATE
 
 Gate.owner()            == FUND
 Gate.fundToken()        == TOKEN

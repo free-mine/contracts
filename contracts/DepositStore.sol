@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.36;
+pragma solidity 0.8.34;
 
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/utils/math/Math.sol';
@@ -111,6 +111,15 @@ abstract contract DepositStore is Ownable {
     );
   }
 
+  /**
+   * @notice функция не фиксирует конкретный токен доллара для покупки.
+   * Смена доллара является исключительно редким событием, к тому же
+   * для траты долларов с адреса покупателя требуется allowance.
+   *
+   * Гипотетически, может произойти ситуация, когда будет внесено так мало
+   * долларов, что количество проданых токенов будет расчитано, как ноль.
+   * В таких случаях вся ответственность лежит на самих шутниках.
+   */
   function buy(uint256 dollarAmount) external {
     address sender = _msgSender();
     uint256 tokenAmount = _dollarsToTokens(dollarAmount, entryPrice);
