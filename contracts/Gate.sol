@@ -1,34 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.36;
+pragma solidity 0.8.34;
 
 import './DepositStore.sol';
 
 /**
  * @notice Entry point for users to interact with the Fund.
  *
- * Withdrawal process:
+ * Вывод средств осуществляется через механику stages и requests.
+ * Пользователи оставляют завяки на вывод, блокируя токены Фонда.
+ * Управляющий завершает стадию, освобождает доллары из позиций
+ * и финансирует ими заявки последней закрытой стадии по справедливой цене.
+ * Те, кого цена устраивает, могут забрать доллары. Остальные могут забрать
+ * токены Фонда.
  *
- * 1. A user creates a withdrawal request. The requested amount of Fund tokens
- * is taken from the user.
- *
- * 2. The Fund manager sets the withdrawal price and provides enough dollars
- * for all requests.
- *
- * 3. The Fund manager starts the next stage. Dollars are assigned to requests
- * from the previous stage at a fixed price.
- *
- * 4. The user decides whether to complete the withdrawal. If the price is
- * acceptable, the user takes the dollars. Otherwise, the user cancels the
- * request and gets the Fund tokens back.
- *
- * Canceling a withdrawal request costs one Fund token. This fee discourages
- * users from creating requests they do not need. With fewer unnecessary
- * requests, fewer dollars need to be set aside. Creating a request is free.
- * There is also no fee when withdrawing dollars.
- *
- * The withdrawal price cannot be lower than 90% of the current purchase price
- * or higher than the current purchase price. This protects against mistakes
- * and malicious actions.
+ * Отмена заявки на любом этапе влечёт штраф в один токен Фонда.
  */
 contract Gate is DepositStore {
   using SafeERC20 for IDollar;
@@ -39,8 +24,10 @@ contract Gate is DepositStore {
   }
 
   struct Stage {
+    bool ready;
     uint256 price;
     IDollar dollar;
+    uint256 fundedAt;
     uint256 dollarScale;
     uint256 tokenAmount;
     uint256 currentRequestId;
@@ -49,24 +36,30 @@ contract Gate is DepositStore {
 
   error SenderIsNotAuthor();
   error StageIsNotComplete();
-  error PriceIsHigherThanEntry();
+  error CompletionOfStagesIsBlocked();
   error PriceIsTooLow(uint256 minPrice);
+  error PriceIsTooHigh(uint256 maxPrice);
+  error StageIsNotReady(uint256 stageId);
   error InsufficientQuantity(uint256 amount);
+  error CancellationTooEarly(uint256 cancelableAt);
   error RequestNotFound(uint256 stageId, uint256 requestId);
 
-  event StageCompleted(uint256 id);
+  event StageReady(uint256 indexed id);
+  event StageCompleted(uint256 indexed id);
   event Sacrificed(address indexed author, uint256 tokenAmount);
 
   event RequestOpened(
+    uint256 tokenAmount,
     address indexed author,
-    uint256 stageId,
-    uint256 requestId
+    uint256 indexed stageId,
+    uint256 indexed requestId
   );
 
   event RequestClosed(
+    bool cancelled,
     address indexed author,
-    uint256 stageId,
-    uint256 requestId
+    uint256 indexed stageId,
+    uint256 indexed requestId
   );
 
   uint256 public currentStageId;
@@ -83,30 +76,84 @@ contract Gate is DepositStore {
     currentStageId = 1;
   }
 
-  function _getRequestDataToClose(uint256 stageId, uint256 requestId)
+  /**
+   * @dev Точка получения request по stageId + requestId.
+   *
+   * Чаще всего сущность stage нужна вместе с request, так что здесь
+   * они возвращаются вместе, чтобы не дублировать получение stage.
+   *
+   * Даже после удаления request должен быть доступен, поэтому
+   * он записывается в память. Для обеспечения самой возможности удаления
+   * stage держим в storage.
+   */
+  function _getStageAndRequest(uint256 stageId, uint256 requestId)
     private
     view
-    returns (address, uint256, Stage storage)
+    returns (Stage storage, Request memory)
   {
-    address sender = _msgSender();
     Stage storage stage = stages[stageId];
-    Request storage request = stage.requests[requestId];
+    Request memory request = stage.requests[requestId];
 
     if (request.tokenAmount == 0) {
       revert RequestNotFound(stageId, requestId);
     }
 
-    if (request.author != sender) {
+    return (stage, request);
+  }
+
+  /**
+   * @dev Используем для действий пользователя над своим request.
+   */
+  function _verifySenderIsAuthor(Request memory request) private view {
+    if (request.author != _msgSender()) {
       revert SenderIsNotAuthor();
     }
+  }
 
-    return (sender, request.tokenAmount, stage);
+  /**
+   * @dev Отменить request может как пользователь, так и owner.
+   * Общую логику удаления держим здесь.
+   */
+  function _cancelRequest(
+    uint256 stageId,
+    uint256 requestId,
+    Stage storage stage,
+    Request memory request
+  ) private {
+    delete stage.requests[requestId];
+
+    stage.tokenAmount -= request.tokenAmount;
+
+    fundToken.burn(address(this), ONE_FUND_TOKEN);
+    fundToken.transfer(request.author, request.tokenAmount - ONE_FUND_TOKEN);
+
+    if (stage.ready) {
+      stage.dollar.safeTransfer(
+        owner(),
+        _tokensToDollars(request.tokenAmount, stage.price, stage.dollarScale)
+      );
+    }
+
+    emit RequestClosed(true, request.author, stageId, requestId);
+  }
+
+  /**
+   * @dev Внешния функция для чтения on-chain данных request.
+   * Применяется для наблюдения за контрактом.
+   */
+  function getRequest(
+    uint256 stageId,
+    uint256 requestId
+  ) external view returns (Request memory) {
+    (, Request memory request) = _getStageAndRequest(stageId, requestId);
+
+    return request;
   }
 
   function requestWithdrawal(uint256 amount) external {
     address sender = _msgSender();
 
-    if (amount < ONE_FUND_TOKEN) {
+    if (amount <= ONE_FUND_TOKEN) {
       revert InsufficientQuantity(amount);
     }
 
@@ -122,53 +169,42 @@ contract Gate is DepositStore {
       tokenAmount: amount
     });
 
-    emit RequestOpened(sender, currentStageId, stage.currentRequestId);
+    emit RequestOpened(amount, sender, currentStageId, stage.currentRequestId);
   }
 
-  function cancelWithdrawalRequest(
+  function cancelRequestByAuthor(
     uint256 stageId,
     uint256 requestId
   ) external {
-    (address sender, uint256 tokenAmount, Stage storage stage)
-      = _getRequestDataToClose(stageId, requestId);
+    (Stage storage stage, Request memory request)
+      = _getStageAndRequest(stageId, requestId);
 
-    delete stage.requests[requestId];
-
-    stage.tokenAmount -= tokenAmount;
-
-    fundToken.burn(address(this), ONE_FUND_TOKEN);
-    fundToken.transfer(sender, tokenAmount - ONE_FUND_TOKEN);
-
-    if (stageId != currentStageId) {
-      stage.dollar.safeTransfer(
-        owner(),
-        _tokensToDollars(tokenAmount, stage.price, stage.dollarScale)
-      );
-    }
-
-    emit RequestClosed(sender, stageId, requestId);
+    _verifySenderIsAuthor(request);
+    _cancelRequest(stageId, requestId, stage, request);
   }
 
   function withdraw(uint256 stageId, uint256 requestId) external {
-    if (stageId == currentStageId) {
-      revert StageIsNotComplete();
-    }
+    (Stage storage stage, Request memory request)
+      = _getStageAndRequest(stageId, requestId);
 
-    (address sender, uint256 tokenAmount, Stage storage stage)
-      = _getRequestDataToClose(stageId, requestId);
+    _verifySenderIsAuthor(request);
+
+    if (!stage.ready) {
+      revert StageIsNotReady(stageId);
+    }
 
     delete stage.requests[requestId];
 
-    stage.tokenAmount -= tokenAmount;
+    stage.tokenAmount -= request.tokenAmount;
 
-    fundToken.burn(address(this), tokenAmount);
+    fundToken.burn(address(this), request.tokenAmount);
 
     stage.dollar.safeTransfer(
-      sender,
-      _tokensToDollars(tokenAmount, stage.price, stage.dollarScale)
+      request.author,
+      _tokensToDollars(request.tokenAmount, stage.price, stage.dollarScale)
     );
 
-    emit RequestClosed(sender, stageId, requestId);
+    emit RequestClosed(false, request.author, stageId, requestId);
   }
 
   function sacrifice(uint256 tokenAmount) external {
@@ -179,29 +215,80 @@ contract Gate is DepositStore {
     emit Sacrificed(sender, tokenAmount);
   }
 
-  function completeStage (uint256 price) external onlyOwner {
-    Stage storage stage = stages[currentStageId];
+  function completeStage() external onlyOwner {
+    uint256 stageId = currentStageId - 1;
+    Stage storage stage = stages[stageId];
+
+    /**
+     * @dev Нельзя звершить стадию, если предыдущая не профинансирована.
+     * Однако, если все токены из стадии вывели до финансирования,
+     * стадия считается несостоявшейся.
+     */
+    if (!stage.ready && stage.tokenAmount > 0) {
+      revert CompletionOfStagesIsBlocked();
+    }
+
+    currentStageId++;
+
+    emit StageCompleted(stageId);
+  }
+
+  function provideStageLiquidity(uint256 price) external onlyOwner {
+    uint256 stageId = currentStageId - 1;
+    Stage storage stage = stages[stageId];
+
+    /**
+     * @dev Функция вызывается без указания stageId и имеет семантику
+     * "Профинансировать последнюю стадию, которая в этом нуждается".
+     * Таким образом, если предыдущая стадия уже была профинансирована,
+     * ошибка StageIsNotComplete говорит о том, что текущая ещё не закрыта. 
+     */
+    if (stage.ready) {
+      revert StageIsNotComplete();
+    }
+
     uint256 minPrice = Math.mulDiv(entryPrice, 90, 100);
+    uint256 maxPrice = Math.mulDiv(entryPrice, 99, 100);
 
     if (price < minPrice) {
       revert PriceIsTooLow(minPrice);
     }
 
-    if (price > entryPrice) {
-      revert PriceIsHigherThanEntry();
+    if (price > maxPrice) {
+      revert PriceIsTooHigh(maxPrice);
     }
 
-    currentStageId++;
+    uint256 dollarAmount =
+      _tokensToDollars(stage.tokenAmount, price, _dollarScale);
+
+    dollar.safeTransferFrom(_msgSender(), address(this), dollarAmount);
+
+    stage.ready = true;
     stage.price = price;
     stage.dollar = dollar;
     stage.dollarScale = _dollarScale;
+    stage.fundedAt = block.timestamp;
 
-    dollar.safeTransferFrom(
-      _msgSender(),
-      address(this),
-      _tokensToDollars(stage.tokenAmount, price, _dollarScale)
-    );
+    emit StageReady(stageId);
+  }
 
-    emit StageCompleted(currentStageId - 1);
+  function cancelRequestByOwner(
+    uint256 stageId,
+    uint256 requestId
+  ) external onlyOwner {
+    (Stage storage stage, Request memory request)
+      = _getStageAndRequest(stageId, requestId);
+
+    if (!stage.ready) {
+      revert StageIsNotReady(stageId);
+    }
+
+    uint256 cancelableAt = stage.fundedAt + 2 weeks;
+
+    if (block.timestamp < cancelableAt) {
+      revert CancellationTooEarly(cancelableAt);
+    }
+
+    _cancelRequest(stageId, requestId, stage, request);
   }
 }
