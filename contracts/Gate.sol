@@ -159,6 +159,8 @@ contract Gate is DepositStore {
 
     delete stage.requests[requestId];
 
+    stage.tokenAmount -= tokenAmount;
+
     fundToken.burn(address(this), tokenAmount);
 
     stage.dollar.safeTransfer(

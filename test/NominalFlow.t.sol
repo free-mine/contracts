@@ -519,7 +519,7 @@ contract NominalFlowTest is SystemFixture {
 
     (, , , uint256 requested, uint256 requestId) = gate.stages(1);
 
-    assertEq(requested, aliceRequest);
+    assertEq(requested, 0);
     assertEq(requestId, 2);
     assertEq(aliceRequest + bobRequest, 100 * ONE_TOKEN);
   }
