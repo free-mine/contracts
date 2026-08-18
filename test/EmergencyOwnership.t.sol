@@ -535,7 +535,7 @@ contract EmergencyOwnershipTest is SystemFixture {
     assertEq(token.balanceOf(alice), 60 * ONE_TOKEN);
     assertEq(token.balanceOf(address(gate)), REQUEST_AMOUNT);
     assertEq(token.totalSupply(), 100 * ONE_TOKEN);
-    _assertCompletedStage();
+    _assertCompletedStage(REQUEST_AMOUNT);
   }
 
   function _assertSettledRequestState(
@@ -557,10 +557,10 @@ contract EmergencyOwnershipTest is SystemFixture {
     assertEq(token.balanceOf(alice), 60 * ONE_TOKEN);
     assertEq(token.balanceOf(address(gate)), 0);
     assertEq(token.totalSupply(), 60 * ONE_TOKEN);
-    _assertCompletedStage();
+    _assertCompletedStage(0);
   }
 
-  function _assertCompletedStage() private view {
+  function _assertCompletedStage(uint256 expectedTokenAmount) private view {
     (
       uint256 price,
       IDollar stageDollar,
@@ -572,7 +572,7 @@ contract EmergencyOwnershipTest is SystemFixture {
     assertEq(price, SETTLEMENT_PRICE);
     assertEq(address(stageDollar), address(dollar));
     assertEq(scale, DOLLAR_SCALE);
-    assertEq(tokenAmount, REQUEST_AMOUNT);
+    assertEq(tokenAmount, expectedTokenAmount);
     assertEq(requestId, 1);
   }
 
@@ -596,6 +596,6 @@ contract EmergencyOwnershipTest is SystemFixture {
     assertEq(replacement.balanceOf(address(fund)), 0);
     assertEq(replacement.balanceOf(address(gate)), 0);
     assertEq(replacement.allowance(address(fund), address(gate)), 0);
-    _assertCompletedStage();
+    _assertCompletedStage(0);
   }
 }

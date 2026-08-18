@@ -263,7 +263,7 @@ contract EmergencyDollarChangeTest is SystemFixture {
 
     completed = _getStage(stageId);
 
-    assertEq(completed.tokenAmount, requestAmount);
+    assertEq(completed.tokenAmount, 0);
   }
 
   function testCompletedStageKeepsOldDollarAfterChange() public {
@@ -308,7 +308,7 @@ contract EmergencyDollarChangeTest is SystemFixture {
     assertEq(stageAfter.price, SETTLEMENT_PRICE);
     assertEq(stageAfter.stageDollar, address(dollar));
     assertEq(stageAfter.dollarScale, DOLLAR_SCALE);
-    assertEq(stageAfter.tokenAmount, aliceRequest);
+    assertEq(stageAfter.tokenAmount, 0);
     assertEq(stageAfter.requestId, bobRequestId);
     assertEq(dollar.balanceOf(alice), 938e6);
     assertEq(dollar.balanceOf(bob), 900e6);
@@ -383,6 +383,10 @@ contract EmergencyDollarChangeTest is SystemFixture {
     assertEq(dollar.balanceOf(alice), 989_500_000);
     assertEq(dollar.balanceOf(address(gate)), 0);
     _assertDollarState(dollar18, newBeforeOldWithdrawal);
+
+    oldStage.tokenAmount = 0;
+    newStage.tokenAmount = 0;
+
     _assertStage(oldStageId, oldStage);
     _assertStage(newStageId, newStage);
   }
