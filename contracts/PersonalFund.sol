@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.36;
+pragma solidity 0.8.34;
 
 import './ManuallyOperated.sol';
 
-
 interface IGate {
-  function completeStage(uint256 price) external;
+  function completeStage() external;
   function changeDollar(address newDollar) external;
   function changeEntryPrice(uint256 newPrice) external;
+  function provideStageLiquidity(uint256 price) external;
+  function cancelRequestByOwner(uint256 stageId, uint256 requestId) external;
 }
 
 /**
@@ -15,7 +16,7 @@ interface IGate {
  *
  * Lets the manager manage the capital and call Gate's admin functions.
  */
-contract Fund is ManuallyOperated {
+contract PersonalFund is ManuallyOperated {
   event ContractURIUpdated();
 
   string public contractURI;
@@ -32,8 +33,19 @@ contract Fund is ManuallyOperated {
     emit ContractURIUpdated();
   }
 
-  function completeStage(uint256 price) external staffOnly {
-    gate.completeStage(price);
+  function completeStage() external staffOnly {
+    gate.completeStage();
+  }
+
+  function provideStageLiquidity(uint256 price) external staffOnly {
+    gate.provideStageLiquidity(price);
+  }
+
+  function cancelRequestByOwner(
+    uint256 stageId,
+    uint256 requestId
+  ) external staffOnly {
+    gate.cancelRequestByOwner(stageId, requestId);
   }
 
   function changeDollar(address newDollar) external staffOnly {
