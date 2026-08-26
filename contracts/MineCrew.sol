@@ -4,43 +4,40 @@ pragma solidity 0.8.34;
 import '@openzeppelin/contracts/access/Ownable2Step.sol';
 
 /**
- * @notice Adds time-based backup admin access to an {Ownable2Step} contract.
+ * @notice Adds a mine crew with scheduled backup admins to an {Ownable2Step}
+ * contract.
  *
- * All code in this contract is for emergencies. It exists as a safety measure
- * and is not meant for regular use. During normal operation, `claimPrivileges`
- * is never called and ownership is never transferred.
- *
- * "Staff" means the owner or an active admin. Staff can schedule trusted
- * addresses as successors. Each successor has a time at or after which it may
- * call {claimPrivileges} and become an admin. Claiming admin privileges does
- * not change the owner. Activation never happens automatically. After an
- * address is scheduled, the contract checks only its timestamp, not whether
- * the owner has lost access.
+ * The crew consists of the owner and all active admins. Any crew member can
+ * schedule a trusted address as a successor. Each successor may call
+ * {claimPrivileges} at or after its scheduled time and become an admin.
+ * Claiming privileges does not change the owner. Activation never happens
+ * automatically. After an address is scheduled, the contract checks only its
+ * timestamp, not whether the owner has lost access.
  *
  * Successor schedules are independent; there is no order or queue. The public
- * mapping can look up only a known address, not list all successors. Events can
- * be used to track them. Any staff member can replace or remove any schedule.
- * When one successor becomes an admin, all other admins and schedules remain.
- * An active admin can schedule more successors, including one that can claim
- * immediately.
+ * `successors` getter can check a known address but cannot list all successors.
+ * Use events to discover and track schedules. Any crew member can replace or
+ * remove any schedule. When one successor becomes an admin, all other admins
+ * and schedules remain. An active admin can schedule more successors,
+ * including one that can claim immediately.
  *
- * A derived contract should use {staffOnly} on every function that backup
- * admins may need. Admins cannot call `onlyOwner` functions. Only the owner can
- * remove an active admin; admins can only remove themselves.
+ * A derived contract should use {crew} on every function that backup admins
+ * may need. Admins cannot call `onlyOwner` functions. Only the owner can remove
+ * another active admin; admins can remove only themselves.
  *
  * If the owner calls `renounceOwnership`, the owner becomes `address(0)`.
- * {WithStaff} itself cannot restore an owner; a derived contract would need to
+ * {MineCrew} itself cannot restore an owner; a derived contract would need to
  * add that ability explicitly. Until then, all `onlyOwner` functions are
  * unavailable. Active admins keep their access, and existing successor
  * schedules are not removed.
  *
  * This mechanism is intended for emergencies such as permanent loss of the
  * owner's key. Every successor must be fully trusted because an active admin
- * can use all `staffOnly` functions and schedule more successors. Use several
- * successors with different activation times to avoid relying on one person.
- * Give earlier times only to the most trusted addresses.
+ * can call every function protected by {crew} and schedule more successors.
+ * Use several successors with different activation times to avoid relying on
+ * one person. Give earlier times only to the most trusted addresses.
  */
-abstract contract WithStaff is Ownable2Step {
+abstract contract MineCrew is Ownable2Step {
   event SuccessorScheduled(
     address indexed successor,
     uint256 previousClaimableAt,
@@ -58,10 +55,10 @@ abstract contract WithStaff is Ownable2Step {
   event AdminRemoved(address indexed admin);
 
   error NotYet();
-  error AlreadyStaff();
+  error AlreadyInCrew();
   error AdminNotFound();
   error InvalidTimestamp();
-  error SenderIsNotStaff();
+  error SenderIsNotInCrew();
   error SuccessorNotFound();
 
   mapping(address => bool) public admins;
@@ -70,22 +67,22 @@ abstract contract WithStaff is Ownable2Step {
   constructor() Ownable(_msgSender()) {}
 
   /**
-   * @dev Allows only the owner or an active admin. Use it on derived-contract
-   * functions that backup admins must be able to call.
+   * @dev Allows calls only from the owner or an active admin. Use it on
+   * functions in derived contracts that backup admins must be able to call.
    */
-  modifier staffOnly {
+  modifier crew {
     address sender = _msgSender();
 
     if (sender != owner() && !admins[sender]) {
-      revert SenderIsNotStaff();
+      revert SenderIsNotInCrew();
     }
 
     _;
   }
 
   /**
-   * @dev Accepts ownership and clears any admin role or successor schedule for
-   * the new owner. All other roles and schedules stay unchanged.
+   * @dev Accepts ownership and removes the new owner from the admin and
+   * successor mappings. All other admins and schedules stay unchanged.
    * {Ownable2Step} still requires the caller to be the pending owner;
    * otherwise the whole transaction reverts.
    */
@@ -109,7 +106,7 @@ abstract contract WithStaff is Ownable2Step {
   }
 
   /**
-   * @notice Lets the owner remove an active admin.
+   * @notice Lets the owner remove an active admin from the crew.
    *
    * @dev This does not remove any successor schedules,
    * including schedules created by that admin.
@@ -129,20 +126,21 @@ abstract contract WithStaff is Ownable2Step {
    * Calling this again for the same address replaces its previous time.
    *
    * @dev `timestamp` must be nonzero because zero means no schedule. A time in
-   * the past or present lets `successor` claim immediately. The schedule has no
-   * expiry. The current owner and active admins cannot be scheduled.
+   * the past or present lets `successor` claim immediately. The schedule never
+   * expires. The owner and active admins cannot be scheduled because they are
+   * already in the crew.
    *
    * A separate zero-address check is intentionally omitted to save gas. While
-   * an owner exists, `address(0)` can be scheduled but can never claim; staff
-   * can remove its schedule like any other. After ownership is renounced, the
-   * existing owner check rejects `address(0)`.
+   * an owner exists, `address(0)` can be scheduled but can never claim; any
+   * crew member can remove its schedule. After ownership is renounced, the
+   * owner check rejects `address(0)` because it is then the owner's address.
    */
   function scheduleSuccessor(
     address successor,
     uint256 timestamp
-  ) external staffOnly {
+  ) external crew {
     if (successor == owner() || admins[successor]) {
-      revert AlreadyStaff();
+      revert AlreadyInCrew();
     }
 
     if (timestamp == 0) {
@@ -162,9 +160,10 @@ abstract contract WithStaff is Ownable2Step {
   }
 
   /**
-   * @notice Removes a successor schedule before it is claimed.
+   * @notice Removes a successor schedule before the successor claims admin
+   * privileges.
    */
-  function removeSuccessor(address successor) external staffOnly {
+  function removeSuccessor(address successor) external crew {
     uint256 claimableAt = successors[successor];
 
     if (claimableAt == 0) {
@@ -176,7 +175,8 @@ abstract contract WithStaff is Ownable2Step {
   }
 
   /**
-   * @notice Makes the caller an admin at or after the caller's scheduled time.
+   * @notice Adds the caller to the crew as an admin at or after the time
+   * scheduled for that caller.
    *
    * @dev A successful claim removes only the caller's successor schedule.
    * Other admins and schedules do not change.
@@ -200,7 +200,7 @@ abstract contract WithStaff is Ownable2Step {
   }
 
   /**
-   * @notice Lets an active admin remove its own admin privileges.
+   * @notice Lets an active admin leave the crew.
    *
    * @dev This does not transfer admin access or schedule a replacement.
    */
