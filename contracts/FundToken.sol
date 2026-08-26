@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.36;
+pragma solidity 0.8.34;
 
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol';
 
-contract Token is ERC20Permit, Ownable {
+/**
+ * @dev Все объявленные функции — только для контракта-владельца Gate.
+ * Все сценарии их вызова описаны в контракте Gate,
+ * что исключает злоупотребление.
+ */
+contract FundToken is ERC20Permit, Ownable {
   constructor(string memory name, string memory symbol)
   ERC20(name, symbol) ERC20Permit(name) Ownable(msg.sender) {}
 

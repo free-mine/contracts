@@ -1,9 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "build": "hardhat build --build-profile production",
-    "test": "hardhat test solidity",
-    "test:coverage": "hardhat test solidity --coverage"
+    "build": "hardhat build --build-profile production"
   },
   "devDependencies": {
     "hardhat": "3.12.0"

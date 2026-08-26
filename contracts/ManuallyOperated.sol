@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.36;
+pragma solidity 0.8.34;
 
 import './WithStaff.sol';
 
@@ -21,6 +21,12 @@ abstract contract ManuallyOperated is WithStaff {
    * call value and input data can be found in the transaction that emitted it.
    */
   event Executed(address indexed target);
+
+  /**
+   * @dev Гипотетически возможны ситуации, когда DeFi-протокол сможет работать
+   * только с чистым коином без обёртки. Лучше быть к этому готовым.
+   */
+  receive() external payable {}
 
   function execute(
     address target,
