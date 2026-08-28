@@ -5,11 +5,13 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol';
 
 /**
- * @dev Все объявленные функции — только для контракта-владельца Gate.
- * Все сценарии их вызова описаны в контракте Gate,
- * что исключает злоупотребление.
+ * @notice ERC-20 token that represents Magic Ore in the Free Mine.
+ * @dev The token owner can mint tokens to any account or burn them from any
+ * account. It can also call `lock` to move tokens from any account to itself
+ * without an allowance. FreeMine is expected to own this token and uses these
+ * powers for purchases, claims, and sacrifices.
  */
-contract FundToken is ERC20Permit, Ownable {
+contract MagicOre is ERC20Permit, Ownable {
   constructor(string memory name, string memory symbol)
   ERC20(name, symbol) ERC20Permit(name) Ownable(msg.sender) {}
 
@@ -21,7 +23,7 @@ contract FundToken is ERC20Permit, Ownable {
     _burn(from, amount);
   }
 
-  function take(address from, uint256 amount) external onlyOwner {
+  function lock(address from, uint256 amount) external onlyOwner {
     _transfer(from, owner(), amount);
   }
 }

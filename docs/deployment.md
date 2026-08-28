@@ -1,121 +1,112 @@
 # Деплой
 
-Эта инструкция описывает развёртывание системы в EVM-сети.
-Перед деплоем ознакомьтесь с [моделью безопасности](security-model.md).
+Эта инструкция описывает развёртывание контрактов Free Mine.
 
 ## Подготовка
 
-Требуются:
+Для деплоя нужны:
 
-* RPC выбранной сети;
-* аккаунт с нативной валютой для оплаты газа;
-* адрес ERC20-токена, используемого как доллар;
-* начальная цена токена Фонда;
-* имя и символ токена Фонда;
-* `contractURI` с метаданными Фонда.
+* RPC выбранной EVM-сети;
+* аккаунт с нативной валютой для газа;
+* адрес долларового ERC20-токена;
+* начальная цена Magic Ore;
+* имя и символ Magic Ore;
+* `contractURI` для `OreVein`.
 
-Долларовый токен должен реализовывать `decimals()`
-и использовать не более 18 знаков после запятой.
+Долларовый токен должен реализовывать `decimals()`.
+Число знаков после запятой должно быть не больше 18.
+`initialPrice` всегда имеет 18 знаков после запятой.
+Например, цена в один доллар задаётся как `1e18`.
+Установите зависимости и соберите контракты:
 
-`initialPrice` всегда задаётся с 18 знаками после запятой независимо
-от `decimals()` долларового токена. Например, цена `$1` задаётся как `1e18`.
-
-Установите зависимости, соберите контракты и запустите тесты:
-
-```shell
+```sh
 npm ci
 npm run build
-npm test
 ```
 
-## Порядок деплоя
+В репозитории нет отдельной команды для деплоя.
+Ниже указан порядок вызовов.
 
-### 1. FundToken
+## 1. MagicOre
 
-Разверните `Token` из `contracts/FundToken.sol`:
+Разверните `MagicOre`:
 
-```text
-Token(name, symbol)
+```solidity
+MagicOre(name, symbol)
 ```
 
-Сохраните адрес как `TOKEN`.
+Сохраните адрес контракта как `MAGIC_ORE`.
+После деплоя владельцем `MagicOre` является деплоер.
 
-### 2. Gate
+## 2. FreeMine
 
-Разверните `Gate`:
+Разверните `FreeMine`:
 
-```text
-Gate(initialPrice, dollar, TOKEN)
+```solidity
+FreeMine(initialPrice, dollar, MAGIC_ORE)
 ```
 
-где:
+Параметры:
 
-* `initialPrice` — начальная цена;
-* `dollar` — адрес долларового ERC20;
-* `TOKEN` — адрес токена из предыдущего шага.
+* `initialPrice` — начальная цена Magic Ore;
+* `dollar` — адрес долларового ERC20-токена;
+* `MAGIC_ORE` — адрес `MagicOre`.
 
-Сохраните адрес как `GATE`. Передайте владение токеном контракту `Gate`:
+Сохраните адрес контракта как `FREE_MINE`.
+Передайте владение `MagicOre` контракту `FreeMine`:
 
-```text
-Token.transferOwnership(GATE)
+```solidity
+MagicOre.transferOwnership(FREE_MINE)
 ```
 
-### 3. PersonalFund
+После этого владельцем `MagicOre` должен быть `FreeMine`.
 
-Разверните `PersonalFund` из `contracts/PersonalFund.sol`:
+## 3. OreVein
 
-```text
-PersonalFund(GATE, contractURI)
+Разверните `OreVein`:
+
+```solidity
+OreVein(FREE_MINE, contractURI)
 ```
 
-Сохраните адрес как `FUND`. Передайте владение `Gate` контракту `PersonalFund`:
+Параметры:
 
-```text
-Gate.transferOwnership(FUND)
+* `FREE_MINE` — адрес `FreeMine`;
+* `contractURI` — строка с метаданными контракта.
+
+Сохраните адрес контракта как `ORE_VEIN`.
+После деплоя владельцем `OreVein` является деплоер.
+Передайте владение `FreeMine` контракту `OreVein`:
+
+```solidity
+FreeMine.transferOwnership(ORE_VEIN)
 ```
 
-После этого штатная структура владения должна быть:
-
-```text
-Fund owner
-    │ owns
-    ▼
-  PersonalFund
-    │ owns
-    ▼
-  Gate
-    │ owns
-    ▼
-FundToken
-```
-
-Если аккаунт, выполнивший деплой `PersonalFund`,
-не должен оставаться владельцем Фонда, вызовите:
-
-```text
-PersonalFund.transferOwnership(newOwner)
-```
-
-а затем с адреса `newOwner`:
-
-```text
-PersonalFund.acceptOwnership()
-```
+После этого владельцем `FreeMine` должен быть `OreVein`.
 
 ## Проверка
 
-После деплоя проверьте:
+Проверьте `OreVein`:
 
-```text
-PersonalFund.owner()    == ожидаемый owner
-PersonalFund.gate()     == GATE
+```solidity
+OreVein.owner() == deployer
+OreVein.freeMine() == FREE_MINE
+OreVein.contractURI() == contractURI
+```
 
-Gate.owner()            == FUND
-Gate.fundToken()        == TOKEN
-Gate.dollar()           == dollar
-Gate.entryPrice()       == initialPrice
-Gate.currentStageId()   == 1
+Проверьте `FreeMine`:
 
-Token.owner()           == GATE
-Token.totalSupply()     == 0
+```solidity
+FreeMine.owner() == ORE_VEIN
+FreeMine.magicOre() == MAGIC_ORE
+FreeMine.dollar() == dollar
+FreeMine.entryPrice() == initialPrice
+FreeMine.currentShiftId() == 1
+```
+
+Проверьте `MagicOre`:
+
+```solidity
+MagicOre.owner() == FREE_MINE
+MagicOre.totalSupply() == 0
 ```
