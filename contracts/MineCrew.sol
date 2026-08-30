@@ -64,7 +64,7 @@ abstract contract MineCrew is Ownable2Step {
   mapping(address => bool) public admins;
   mapping(address => uint256) public successors;
 
-  constructor() Ownable(_msgSender()) {}
+  constructor(address initialOwner) Ownable(initialOwner) {}
 
   /**
    * @dev Allows calls only from the owner or an active admin. Use it on

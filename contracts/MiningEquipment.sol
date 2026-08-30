@@ -12,7 +12,7 @@ pragma solidity 0.8.34;
  * Arbitrary calls give the authorized caller full control over assets held by
  * the derived contract.
  */
-abstract contract MineOperations {
+abstract contract MiningEquipment {
   error CallFailed(bytes reason);
 
   /**

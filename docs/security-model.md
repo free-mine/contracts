@@ -38,7 +38,7 @@ Free Mine является децентрализованно наблюдаем
 Особое внимание следует уделять:
 
 * несанкционированному доступу со стороны;
-* обходу `onlyOwner`, `staffOnly` и других механизмов авторизации;
+* обходу `onlyOwner`, `crew` и других механизмов авторизации;
 * возможности стать admin или successor без разрешённой процедуры;
 * reentrancy;
 * некорректной обработке ERC20;
@@ -196,7 +196,7 @@ Security finding возникает, если:
 Например:
 
 * arbitrary external user;
-* FundToken holder;
+* MagicOre holder;
 * withdrawal request owner;
 * malicious ERC20;
 * active admin;
@@ -225,8 +225,8 @@ finding должен рассматриваться прежде всего ка
 7. ERC20 compatibility assumptions;
 8. DoS и griefing;
 9. timestamp/block manipulation;
-10. interaction между `FundToken`, `Gate` и `PersonalFund`;
-11. аварийный механизм `WithStaff`;
+10. interaction между `MagicOre`, `FreeMine` и `OreVein`;
+11. аварийный механизм `MineCrew`;
 12. operational и centralization risks доверенного владельца.
 
 Наличие широких полномочий у владельца должно быть явно указано
