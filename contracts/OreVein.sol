@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.34;
 
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+
 import './MineCrew.sol';
-import './MineOperations.sol';
+import './MiningEquipment.sol';
 
 interface IFreeMine {
   function closeShift() external;
@@ -19,7 +22,9 @@ interface IFreeMine {
  * administrative calls to the Free Mine. The Ore Vein must own the Free Mine
  * for these forwarded calls to succeed.
  */
-contract OreVein is MineCrew, MineOperations {
+contract OreVein is MineCrew, MiningEquipment {
+  using SafeERC20 for IERC20;
+
   error InvalidTarget();
 
   event ContractURIUpdated();
@@ -27,9 +32,16 @@ contract OreVein is MineCrew, MineOperations {
   string public contractURI;
   IFreeMine public immutable freeMine;
 
-  constructor(IFreeMine freeMineAddress, string memory initialContractURI) {
-    freeMine = freeMineAddress;
+  constructor(
+    address dollar,
+    address initialOwner,
+    address freeMineAddress,
+    string memory initialContractURI
+  ) MineCrew(initialOwner) {
     contractURI = initialContractURI;
+    freeMine = IFreeMine(freeMineAddress);
+
+    IERC20(dollar).forceApprove(freeMineAddress, type(uint256).max);
   }
 
   function setContractURI(string calldata newContractURI) external crew {
@@ -48,8 +60,6 @@ contract OreVein is MineCrew, MineOperations {
     return _execute(target, value, data);
   }
 
-  // Below is the forwarding zone
-
   function closeShift() external crew {
     freeMine.closeShift();
   }
@@ -64,6 +74,7 @@ contract OreVein is MineCrew, MineOperations {
 
   function changeDollar(address newDollar) external crew {
     freeMine.changeDollar(newDollar);
+    IERC20(newDollar).forceApprove(address(freeMine), type(uint256).max);
   }
 
   function updateEntryPrice(uint256 newPrice) external crew {
