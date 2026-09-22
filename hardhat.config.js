@@ -1,3 +1,15 @@
 import { defineConfig } from 'hardhat/config'
 
-export default defineConfig({ solidity: '0.8.34' })
+const compiler = {
+  version: '0.8.37',
+  settings: { evmVersion: 'cancun' },
+}
+
+export default defineConfig({
+  solidity: {
+    profiles: {
+      default: compiler,
+      production: compiler,
+    },
+  },
+})

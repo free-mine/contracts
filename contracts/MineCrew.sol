@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.34;
+pragma solidity 0.8.37;
 
-import '@openzeppelin/contracts/access/Ownable2Step.sol';
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @notice Adds a mine crew with scheduled backup admins to an {Ownable2Step}
