@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.34;
+pragma solidity 0.8.37;
 
-import './OreVein.sol';
-import './MagicOre.sol';
-import './FreeMine.sol';
+import "./OreVein.sol";
+import "./MagicOre.sol";
+import "./FreeMine.sol";
 
 contract NewCampFounding {
   OreVein public immutable oreVein;
@@ -11,7 +11,7 @@ contract NewCampFounding {
   FreeMine public immutable freeMine;
 
   constructor(address dollar, string memory contractURI) {
-    magicOre = new MagicOre('Magic Ore', 'ORE');
+    magicOre = new MagicOre("Magic Ore", "ORE");
 
     freeMine = new FreeMine(
       10 ** magicOre.decimals(),

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.34;
+pragma solidity 0.8.37;
 
-import './OreExchange.sol';
+import "./OreExchange.sol";
 
 /**
  * @notice Main contract for miners to buy Magic Ore and exchange it for
